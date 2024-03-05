@@ -27,6 +27,13 @@ export interface PreviewListProps {
   previewGridProps?: { container?: BoxProps; item?: BoxProps };
   showFileNames?: boolean;
   useChipsForPreview?: boolean;
+  customPreviewZone?: ({
+    fileObjects,
+    handleRemove,
+  }: {
+    fileObjects: FileObject[];
+    handleRemove: (index: number) => void;
+  }) => React.Component;
 }
 
 function PreviewList(props: PreviewListProps) {
@@ -40,6 +47,7 @@ function PreviewList(props: PreviewListProps) {
     previewGridProps,
     classes,
     getPreviewIcon,
+    customPreviewZone,
   } = props;
 
   const sxGridContainer = useMemo<BoxProps["sx"]>(
@@ -124,6 +132,24 @@ function PreviewList(props: PreviewListProps) {
     );
   }
 
+  if (customPreviewZone) {
+    return (
+      <Box
+        sx={sxGridContainer}
+        {...previewGridProps?.container}
+        className={clsx(classes?.root, previewGridClasses?.container)}
+      >
+        <Box
+          {...previewGridProps?.item}
+          sx={{ width: "fill-available" }}
+          className={clsx(classes?.imageContainer, previewGridClasses?.item)}
+        >
+          {customPreviewZone({ fileObjects, handleRemove })}
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={sxGridContainer}
@@ -169,6 +195,7 @@ PreviewList.propTypes = {
   previewGridProps: PropTypes.object,
   showFileNames: PropTypes.bool,
   useChipsForPreview: PropTypes.bool,
+  customPreviewZone: PropTypes.func,
 };
 
 export default PreviewList;
