@@ -1,14 +1,14 @@
-# material-ui-dropzone
+# @kiocosta/material-ui-dropzone
 
 > Material-UI-dropzone is a [React](https://github.com/facebook/react) component using [Material-UI](https://github.com/mui-org/material-ui) and is based on the excellent [react-dropzone](https://github.com/react-dropzone/react-dropzone) library.
+>
+> ⚠️ This is a fork from [material-ui-dropzone](https://github.com/Deckstar/mui-file-dropzone) containing a more updated version of `react-dropzone`, which allows for custom validations of files.
 
 [![License](https://img.shields.io/github/license/yuvaleros/material-ui-dropzone)](https://github.com/Yuvaleros/material-ui-dropzone/File/master/LICENSE) <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->[![All Contributors](https://img.shields.io/badge/all_contributors-9-orange.svg)](#contributors)
 
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
-[![Rebuild Dist Workflow Status](https://img.shields.io/github/workflow/status/yuvaleros/material-ui-dropzone/Rebuild%20Dist?label=build)](https://github.com/Yuvaleros/material-ui-dropzone/actions?query=workflow%3A%22Rebuild+Dist%22) [![Update Docs Workflow Status](https://img.shields.io/github/workflow/status/yuvaleros/material-ui-dropzone/Update%20Docs?label=docs)](https://github.com/Yuvaleros/material-ui-dropzone/actions?query=workflow%3A%22Update+Docs%22)
-
-[![npm package](https://img.shields.io/npm/v/material-ui-dropzone)](https://www.npmjs.com/package/material-ui-dropzone) [![npm downloads](https://img.shields.io/npm/dm/material-ui-dropzone.svg)](https://www.npmjs.com/package/material-ui-dropzone)
+[![npm package](https://img.shields.io/npm/v/@kiocosta/mui-file-dropzone)](https://www.npmjs.com/package/@kiocosta/mui-file-dropzone)
 
 This components provide either a file-upload dropzone or a file-upload dropzone inside of a dialog.
 
@@ -17,18 +17,24 @@ The file-upload dropzone features some snazzy "File Allowed/Not Allowed" effects
 ## Installation
 
 ```shell
-npm install --save mui-file-dropzone
+npm install --save @kiocosta/mui-file-dropzone
 ```
 
 or
 
 ```shell
-yarn add mui-file-dropzone
+yarn add @kiocosta/mui-file-dropzone
 ```
+
+## About this fork
+
+This fork has a more updated version of `react-dropzone`, which supports additional custom validations on file drop with the new `validator` property. Check the examples below to see how it can be used.
+
+Added support for a custom preview zone, which allows the developer to pass his own component as a property and thus display a file preview in any way he prefers.
 
 ## Support
 
-`mui-file-dropzone` complies to the following support matrix.
+`@kiocosta/mui-file-dropzone` complies to the following support matrix.
 
 | version | React            | Material-UI    |
 | ------- | ---------------- | -------------- |
@@ -65,7 +71,7 @@ This components creates the dropzone, previews and snackbar notifications withou
 
 ```jsx static
 import React, { Component } from "react";
-import { DropzoneArea } from "mui-file-dropzone";
+import { DropzoneArea } from "@kiocosta/mui-file-dropzone";
 
 class DropzoneAreaExample extends Component {
   constructor(props) {
@@ -79,8 +85,33 @@ class DropzoneAreaExample extends Component {
       files: files,
     });
   }
+  async createAsyncData({ dataTransfer, target }) {
+    return someAsyncOperation(dataTransfer, target);
+  }
+  customValidation(file) {
+    if (file.width > 360 || file.height > 480) {
+      return {
+        message: "The file exceeds the allowed resolution",
+        code: "invalid-dimensions",
+      };
+    }
+  }
   render() {
-    return <DropzoneArea onChange={this.handleChange.bind(this)} />;
+    return (
+      <DropzoneArea
+        onChange={this.handleChange.bind(this)}
+        initialFiles={this.state.files}
+        customPreviewZone={({ fileObjects, handleRemove }) => {
+          if (!fileObjects?.length) return null;
+          return <your custom component />;
+        }}
+        showPreviewsInDropzone={showPreviewsInDropzone}
+        dropzoneProps={{
+          getFilesFromEvent: (event) => createAsyncData(event), // getFilesFromEvent is useful for async operations
+          validator: (file) => customValidation(file), // no async operations allowed
+        }}
+      />
+    );
   }
 }
 
@@ -93,7 +124,7 @@ This component provides the DropzoneArea inside of a MaterialUI Dialog.
 
 ```jsx static
 import React, { Component } from "react";
-import { DropzoneDialog } from "mui-file-dropzone";
+import { DropzoneDialog } from "@kiocosta/mui-file-dropzone";
 import Button from "@mui/material/Button";
 
 export default class DropzoneDialogExample extends Component {

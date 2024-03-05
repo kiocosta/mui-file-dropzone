@@ -18,7 +18,11 @@ import React, {
   HTMLProps,
   PureComponent,
 } from "react";
-import Dropzone, { DropEvent, DropzoneProps } from "react-dropzone";
+import Dropzone, {
+  DropEvent,
+  DropzoneProps,
+  FileRejection,
+} from "react-dropzone";
 
 import { convertBytesToMbsOrKbs, isImage, readFile } from "../helpers";
 import { AlertType, FileObject } from "../types";
@@ -203,7 +207,7 @@ export type DropzoneAreaBaseProps = {
    * @param {File[]} rejectedFiles All the rejected files.
    * @param {Event} event The react-dropzone drop event.
    */
-  onDropRejected?: (rejectedFiles: File[], event: DropEvent) => void;
+  onDropRejected?: (rejectedFiles: FileRejection[], event: DropEvent) => void;
   /**
    * Fired when an alert is triggered.
    *
@@ -245,10 +249,26 @@ export type DropzoneAreaBaseProps = {
    * @param {number} maxFileSize The `maxFileSize` prop currently set for the component
    */
   getDropRejectMessage?: (
-    rejectedFile: File,
+    rejectedFile: FileRejection,
     acceptedFiles: string[],
     maxFileSize: number
   ) => string;
+  /**
+   * Defines a custom preview zone component for handling file objects with removal functionality.
+   * @typedef {Object} FileObject - Object representing a file.
+   * @property {File} file - The file object (Javascript File API)
+   * @property {string | ArrayBuffer | null | undefined} data - File's data
+   * @typedef {Function} handleRemove - Callback function for removing a file by index.
+   * @param {{ fileObjects: FileObject[]; handleRemove: handleRemove }} params - Parameters for the custom preview zone component.
+   * @returns {React.Component} A React component representing the custom preview zone.
+   */
+  customPreviewZone?: ({
+    fileObjects,
+    handleRemove,
+  }: {
+    fileObjects: FileObject[];
+    handleRemove: (index: number) => void;
+  }) => React.Component;
   /**
    * A function which determines which icon to display for a file preview.
    *
@@ -312,6 +332,7 @@ class DropzoneAreaBase extends PureComponent<
     onDrop: PropTypes.func,
     onDropRejected: PropTypes.func,
     onAlert: PropTypes.func,
+    customPreviewZone: PropTypes.func,
   };
 
   static defaultProps = {
@@ -331,6 +352,7 @@ class DropzoneAreaBase extends PureComponent<
     previewGridClasses: {},
     previewGridProps: {},
     showAlerts: true,
+    customPreviewZone: undefined,
     alertSnackbarProps: {
       anchorOrigin: {
         horizontal: "left",
@@ -352,15 +374,25 @@ class DropzoneAreaBase extends PureComponent<
       DropzoneAreaBaseProps["getFileRemovedMessage"]
     >,
     getDropRejectMessage: ((rejectedFile, acceptedFiles, maxFileSize) => {
-      let message = `File ${rejectedFile.name} was rejected. `;
-      if (!acceptedFiles.includes(rejectedFile.type)) {
+      let message = `File ${rejectedFile.file.name} was rejected.`;
+      if (
+        !acceptedFiles.some(
+          (fileType) =>
+            !fileType
+              .toLocaleLowerCase()
+              .includes(rejectedFile.file.type.toLocaleLowerCase())
+        )
+      ) {
         message += "File type not supported. ";
       }
-      if (rejectedFile.size > maxFileSize) {
+      if (rejectedFile.file.size > maxFileSize) {
         message +=
           "File is too big. Size limit is " +
           convertBytesToMbsOrKbs(maxFileSize) +
           ". ";
+      }
+      if (rejectedFile.errors.length) {
+        message += rejectedFile.errors.map((error) => error.message).join(" ");
       }
       return message;
     }) as NonNullable<DropzoneAreaBaseProps["getDropRejectMessage"]>,
@@ -488,7 +520,7 @@ class DropzoneAreaBase extends PureComponent<
   };
 
   handleRemove: PreviewListProps["handleRemove"] = (fileIndex) => (event) => {
-    event.stopPropagation();
+    event?.stopPropagation();
 
     const {
       fileObjects,
@@ -553,6 +585,17 @@ class DropzoneAreaBase extends PureComponent<
       backgroundImage: `repeating-linear-gradient(-45deg, ${this.props.theme.palette.error.light}, ${this.props.theme.palette.error.light} 25px, ${this.props.theme.palette.error.dark} 25px, ${this.props.theme.palette.error.dark} 50px)`,
       borderColor: "error.main",
     } as BoxProps["sx"],
+    invisible: {
+      display: "none",
+    } as BoxProps["sx"],
+    disabled: {
+      color: "rgba(0,0,0,0.26)",
+      cursor: "default",
+      "& svg": {
+        color: "rgba(0,0,0,0.26)",
+        cursor: "default",
+      },
+    },
     textContainer: {
       textAlign: "center",
     } as BoxProps["sx"],
@@ -588,14 +631,13 @@ class DropzoneAreaBase extends PureComponent<
       previewGridProps,
       previewText,
       showAlerts,
-      showFileNames,
       showFileNamesInPreview,
       showPreviews,
       showPreviewsInDropzone,
       useChipsForPreview,
+      customPreviewZone,
     } = this.props;
     const { openSnackBar, snackbarMessage, snackbarVariant } = this.state;
-
     const acceptFiles = acceptedFiles?.join(",");
     const isMultiple = filesLimit > 1;
     const previewsVisible = showPreviews && fileObjects.length > 0;
@@ -621,8 +663,12 @@ class DropzoneAreaBase extends PureComponent<
                 sx={
                   {
                     ...this.defaultSx.root,
+                    ...(dropzoneProps?.disabled ? this.defaultSx.disabled : {}),
                     ...(isActive ? this.defaultSx.active : {}),
                     ...(isInvalid ? this.defaultSx.invalid : {}),
+                    ...(previewsInDropzoneVisible && fileObjects.length
+                      ? this.defaultSx.invisible
+                      : {}),
                   } as BoxProps["sx"]
                 }
                 {...getRootProps({
@@ -657,42 +703,10 @@ class DropzoneAreaBase extends PureComponent<
                     />
                   )}
                 </Box>
-
-                {previewsInDropzoneVisible ? (
-                  <PreviewList
-                    fileObjects={fileObjects}
-                    handleRemove={this.handleRemove}
-                    getPreviewIcon={getPreviewIcon}
-                    showFileNames={showFileNames}
-                    useChipsForPreview={useChipsForPreview}
-                    previewChipProps={previewChipProps}
-                    previewGridClasses={previewGridClasses}
-                    previewGridProps={previewGridProps}
-                  />
-                ) : null}
               </Box>
             );
           }}
         </Dropzone>
-
-        {previewsVisible ? (
-          <Fragment>
-            <Typography variant="subtitle1" component="span">
-              {previewText}
-            </Typography>
-
-            <PreviewList
-              fileObjects={fileObjects}
-              handleRemove={this.handleRemove}
-              getPreviewIcon={getPreviewIcon}
-              showFileNames={showFileNamesInPreview}
-              useChipsForPreview={useChipsForPreview}
-              previewChipProps={previewChipProps}
-              previewGridClasses={previewGridClasses}
-              previewGridProps={previewGridProps}
-            />
-          </Fragment>
-        ) : null}
 
         {(typeof showAlerts === "boolean" && showAlerts) ||
         (Array.isArray(showAlerts) && showAlerts.includes(snackbarVariant)) ? (
@@ -709,6 +723,27 @@ class DropzoneAreaBase extends PureComponent<
               message={snackbarMessage}
             />
           </Snackbar>
+        ) : null}
+
+        {previewsVisible || previewsInDropzoneVisible ? (
+          <Fragment>
+            {!customPreviewZone && (
+              <Typography variant="subtitle1" component="span">
+                {previewText}
+              </Typography>
+            )}
+            <PreviewList
+              fileObjects={fileObjects}
+              handleRemove={this.handleRemove}
+              getPreviewIcon={getPreviewIcon}
+              showFileNames={showFileNamesInPreview}
+              useChipsForPreview={useChipsForPreview}
+              previewChipProps={previewChipProps}
+              previewGridClasses={previewGridClasses}
+              previewGridProps={previewGridProps}
+              customPreviewZone={customPreviewZone}
+            />
+          </Fragment>
         ) : null}
       </Fragment>
     );
